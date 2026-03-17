@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>数字合体ゲーム</title>
+<style>
+  /* 全体のスタイル */
+  body {
+    font-family: 'Arial Rounded MT Bold', 'Helvetica Rounded', Arial, sans-serif;
+    background-color: #fff9e6;
+    color: #555;
+    text-align: center;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+
+  #warning-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 50px rgba(255, 0, 0, 0);
+    transition: box-shadow 0.4s ease-in-out;
+    z-index: 100;
+  }
+  
+  #warning-overlay.active {
+    box-shadow: inset 0 0 50px rgba(255, 71, 87, 0.8);
+  }
+
+  h1 {
+    color: #ff7f50;
+    margin-bottom: 5px;
+    text-shadow: 2px 2px 0px #ffe4b5;
+  }
+
+  p.desc {
+    font-size: 14px;
+    margin-bottom: 15px;
+    color: #888;
+  }
+
+  /* ★追加: スコア表示部分のスタイル */
+  .score-container {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+
+  .score-box {
+    background-color: #ffeaa7;
+    padding: 10px 25px;
+    border-radius: 12px;
+    font-weight: bold;
+    font-size: 14px;
+    color: #888;
+    box-shadow: 0 4px 0 #fbd872;
+    min-width: 80px;
+  }
+
+  .score-box span {
+    display: block;
+    font-size: 26px;
+    color: #555;
+    margin-top: 5px;
+  }
+
+  .button-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  button {
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: all 0.1s;
+    position: relative;
+    z-index: 10;
+  }
+  button:active {
+    transform: translateY(6px);
+    box-shadow: none !important;
+  }
+  
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none !important;
+  }
+  
+  #deploy-btn { background-color: #ff6b81; box-shadow: 0 6px 0 #ff4757; }
+  #reset-btn { background-color: #48dbfb; box-shadow: 0 6px 0 #0abde3; }
+  #undo-btn { background-color: #a29bfe; box-shadow: 0 6px 0 #6c5ce7; }
+  #delete-btn { background-color: #fff; color: #e17055; box-shadow: 0 6px 0 #fdcb6e; }
+  
+  #delete-btn.active-mode { 
+    background-color: #ff7675; 
+    color: white; 
+    box-shadow: 0 6px 0 #d63031; 
+  }
+
+  .board-wrapper {
+    position: relative;
+    z-index: 10; 
+  }
+
+  #game-board {
+    display: grid;
+    grid-template-columns: repeat(4, 70px);
+    grid-template-rows: repeat(4, 70px);
+    gap: 10px;
+    background-color: #ffeaa7;
+    padding: 15px;
+    border-radius: 15px;
+    box-shadow: 0 8px 0 #fbd872;
+    touch-action: none;
+    transition: all 0.3s;
+  }
+
+  #game-board.delete-active {
+    background-color: #ffcccc;
+    box-shadow: 0 8px 0 #ff9999;
+  }
+  #game-board.delete-active .cell {
+    cursor: crosshair;
+  }
+
+  #message-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255, 249, 230, 0.85);
+    border-radius: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 40px;
+    font-weight: bold;
+    color: #ff4757;
+    text-shadow: 2px 2px 0px #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-in-out;
+    z-index: 50;
+  }
+
+  #message-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .cell {
+    width: 70px;
+    height: 70px;
+    background-color: #fff;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.1);
+    position: relative;
+    z-index: 1;
+  }
+
+  #game-board.delete-active .cell[class*="val-"] {
+    animation: pulse 1s infinite;
+    box-shadow: 0 0 10px #ff4757, inset 0 -3px 0 rgba(0,0,0,0.1);
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+
+  .cell.moving {
+    transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    z-index: 10;
+  }
+
+  @keyframes sparkle-pop {
+    0% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 235, 59, 0); }
+    50% { 
+      transform: scale(1.15); 
+      box-shadow: 0 0 20px 10px rgba(255, 235, 59, 0.8), inset 0 0 15px rgba(255,255,255,0.9); 
+      background-color: #fffacd;
+    }
+    100% { transform: scale(1); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.1); }
+  }
+  .merged-effect {
+    animation: sparkle-pop 0.4s ease-in-out;
+    z-index: 5;
+  }
+
+  .val-1 { background-color: #ffb7b2; color: #fff; }
+  .val-2 { background-color: #ffdac1; color: #555; }
+  .val-4 { background-color: #e2f0cb; color: #555; }
+  .val-8 { background-color: #b5ead7; color: #555; }
+  .val-16 { background-color: #c7ceea; color: #fff; }
+  .val-32 { background-color: #f0a6ca; color: #fff; }
+  .val-64 { background-color: #9c89b8; color: #fff; }
+  .val-128 { background-color: #f2d7d5; color: #555; }
+  .val-256 { background-color: #a3e4d7; color: #555; }
+  .val-512 { background-color: #f9e79f; color: #555; }
+  .val-1024 { background-color: #f5b041; color: #fff; }
+  .val-2048 { background-color: #e74c3c; color: #fff; box-shadow: 0 0 15px #e74c3c; font-size: 20px;}
+</style>
+</head>
+<body>
+
+  <div id="warning-overlay"></div>
+
+  <h1>数字合体ゲーム</h1>
+  <p class="desc">「配置」で数字を出し、同じ数字をスワイプでくっつけて2048を目指そう！</p>
+  
+  <div class="score-container">
+    <div class="score-box">SCORE<br><span id="current-score">0</span></div>
+    <div class="score-box">BEST<br><span id="best-score">0</span></div>
+  </div>
+
+  <div class="button-container">
+    <button id="deploy-btn">配置する</button>
+    <button id="reset-btn">始めから</button>
+  </div>
+  
+  <div class="button-container">
+    <button id="undo-btn" disabled>↩ 1手戻す (5)</button>
+    <button id="delete-btn">🔨 1コ消す (5)</button>
+  </div>
+  
+  <div class="board-wrapper">
+    <div id="game-board"></div>
+    <div id="message-overlay">GAME OVER</div>
+  </div>
+
+<script>
+  let board = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0]
+  ];
+
+  const spawnNumbers = [1, 2, 4, 8, 16];
+  const boardEl = document.getElementById('game-board');
+  const msgOverlayEl = document.getElementById('message-overlay');
+  const warningOverlay = document.getElementById('warning-overlay'); 
+  const undoBtn = document.getElementById('undo-btn');
+  const deleteBtn = document.getElementById('delete-btn');
+  
+  // ★追加: スコア用の要素と変数
+  const scoreEl = document.getElementById('current-score');
+  const bestScoreEl = document.getElementById('best-score');
+  let score = 0;
+  // ブラウザに保存されているベストスコアを読み込む（なければ0）
+  let bestScore = localStorage.getItem('number_merge_bestScore') || 0;
+  bestScoreEl.textContent = bestScore;
+
+  let startX, startY, startR, startC;
+  let mergedCells = []; 
+
+  let boardHistory = []; 
+  let isDeleteMode = false;
+  let undoCount = 5;
+  let deleteCount = 5;
+  let isGameOver = false;
+
+  // ★追加: スコアを更新する関数
+  function updateScoreDisplay() {
+    scoreEl.textContent = score;
+    if (score > bestScore) {
+      bestScore = score;
+      bestScoreEl.textContent = bestScore;
+      // ベストスコアをブラウザに保存
+      localStorage.setItem('number_merge_bestScore', bestScore);
+    }
+  }
+
+  function updateItemButtons() {
+    if (!isDeleteMode) {
+      deleteBtn.textContent = `🔨 1コ消す (${deleteCount})`;
+    }
+    undoBtn.textContent = `↩ 1手戻す (${undoCount})`;
+
+    if (isGameOver) {
+      undoBtn.disabled = true;
+      deleteBtn.disabled = true;
+    } else {
+      undoBtn.disabled = (boardHistory.length === 0 || undoCount <= 0);
+      deleteBtn.disabled = (deleteCount <= 0);
+    }
+  }
+
+  function saveState() {
+    // ★変更: 盤面だけでなく、その時のスコアもセットで履歴に保存する
+    boardHistory.push({
+      boardState: JSON.parse(JSON.stringify(board)),
+      scoreState: score
+    });
+    updateItemButtons(); 
+  }
+
+  function showMessage(text) {
+    msgOverlayEl.textContent = text;
+    msgOverlayEl.classList.add('active');
+  }
+
+  function hideMessage() {
+    msgOverlayEl.classList.remove('active');
+  }
+
+  function checkGameOver() {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (board[r][c] === 0) return false;
+      }
+    }
+    
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (c < 3 && board[r][c] === board[r][c+1]) return false;
+        if (r < 3 && board[r][c] === board[r+1][c]) return false;
+      }
+    }
+    return true;
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    let emptyCount = 0; 
+
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const val = board[r][c];
+        
+        if (val === 0) {
+          emptyCount++;
+        }
+
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        
+        if (val > 0) {
+          cell.classList.add('val-' + val);
+          cell.textContent = val;
+          
+          if (mergedCells.some(m => m.r === r && m.c === c)) {
+            cell.classList.add('merged-effect');
+          }
+        }
+
+        cell.addEventListener('mousedown', (e) => handleStart(e, r, c));
+        cell.addEventListener('touchstart', (e) => handleStart(e, r, c), { passive: false });
+        
+        boardEl.appendChild(cell);
+      }
+    }
+
+    if (emptyCount <= 1) {
+      warningOverlay.classList.add('active');
+    } else {
+      warningOverlay.classList.remove('active');
+    }
+
+    if (checkGameOver()) {
+      isGameOver = true;
+      showMessage("GAME OVER");
+      updateItemButtons(); 
+    }
+  }
+
+  function spawnNumber() {
+    let emptyCells = [];
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (board[r][c] === 0) emptyCells.push({ r, c });
+      }
+    }
+    if (emptyCells.length === 0) return false;
+
+    let randIndex = Math.floor(Math.random() * emptyCells.length);
+    let cell = emptyCells[randIndex];
+    let val = spawnNumbers[Math.floor(Math.random() * spawnNumbers.length)];
+    board[cell.r][cell.c] = val;
+    return true;
+  }
+
+  document.getElementById('deploy-btn').addEventListener('click', () => {
+    if (isGameOver) return;
+
+    saveState(); 
+
+    if (!spawnNumber()) {
+      alert("盤面がいっぱいです！合体させて場所を空けてください。");
+      boardHistory.pop(); 
+      updateItemButtons();
+    } else {
+      mergedCells = []; 
+      render();
+    }
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        board[r][c] = 0;
+      }
+    }
+    hideMessage();
+    mergedCells = [];
+    
+    boardHistory = [];
+    undoCount = 5;
+    deleteCount = 5;
+    isGameOver = false;
+    
+    // ★追加: リセット時にスコアを0に戻す
+    score = 0;
+    updateScoreDisplay();
+
+    disableDeleteMode();
+    updateItemButtons();
+
+    for (let i = 0; i < 4; i++) {
+      spawnNumber();
+    }
+    render();
+  });
+
+  undoBtn.addEventListener('click', () => {
+    if (isGameOver) return;
+
+    if (undoCount > 0 && boardHistory.length > 0) {
+      disableDeleteMode(); 
+      hideMessage(); 
+      
+      // ★変更: 盤面とスコアの両方を1手前の状態に戻す
+      const previousState = boardHistory.pop(); 
+      board = previousState.boardState;
+      score = previousState.scoreState;
+      
+      mergedCells = [];
+      undoCount--; 
+      
+      updateScoreDisplay(); // スコア表示を更新
+      render();
+      updateItemButtons(); 
+    }
+  });
+
+  function disableDeleteMode() {
+    isDeleteMode = false;
+    deleteBtn.classList.remove('active-mode');
+    boardEl.classList.remove('delete-active');
+    updateItemButtons(); 
+  }
+
+  deleteBtn.addEventListener('click', () => {
+    if (isGameOver || deleteCount <= 0) return;
+
+    isDeleteMode = !isDeleteMode; 
+
+    if (isDeleteMode) {
+      deleteBtn.classList.add('active-mode');
+      deleteBtn.textContent = "キャンセル";
+      boardEl.classList.add('delete-active'); 
+    } else {
+      disableDeleteMode();
+    }
+  });
+
+  function handleStart(e, r, c) {
+    if (board[r][c] === 0) return;
+    if (isGameOver) return;
+
+    if (isDeleteMode) {
+      e.preventDefault();
+      saveState(); 
+      
+      board[r][c] = 0; 
+      deleteCount--; 
+      disableDeleteMode(); 
+      render();
+      updateItemButtons(); 
+      return;
+    }
+
+    e.preventDefault();
+
+    startX = e.type.includes('mouse') ? e.pageX : e.touches[0].pageX;
+    startY = e.type.includes('mouse') ? e.pageY : e.touches[0].pageY;
+    startR = r;
+    startC = c;
+
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchend', handleEnd);
+  }
+
+  function handleEnd(e) {
+    document.removeEventListener('mouseup', handleEnd);
+    document.removeEventListener('touchend', handleEnd);
+
+    if (startX === undefined || startY === undefined) return;
+
+    let endX = e.type.includes('mouse') ? e.pageX : e.changedTouches[0].pageX;
+    let endY = e.type.includes('mouse') ? e.pageY : e.changedTouches[0].pageY;
+
+    let dx = endX - startX;
+    let dy = endY - startY;
+
+    if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
+      startX = startY = undefined;
+      return;
+    }
+
+    let targetR = startR;
+    let targetC = startC;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) targetC++; else targetC--;
+    } else {
+      if (dy > 0) targetR++; else targetR--;
+    }
+
+    if (targetR >= 0 && targetR < 4 && targetC >= 0 && targetC < 4) {
+      if (board[targetR][targetC] === board[startR][startC]) {
+        
+        saveState(); 
+
+        const cells = document.querySelectorAll('.cell');
+        const startCell = cells[startR * 4 + startC];
+        
+        const moveX = (targetC - startC) * 80;
+        const moveY = (targetR - startR) * 80;
+
+        startCell.classList.add('moving');
+        startCell.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+        setTimeout(() => {
+          board[targetR][targetC] *= 2;
+          
+          // ★追加: 合体して出来上がった数字の分だけスコアを加算
+          score += board[targetR][targetC];
+          updateScoreDisplay();
+
+          board[startR][startC] = 0;
+          
+          mergedCells = [{r: targetR, c: targetC}];
+          
+          if (board[targetR][targetC] === 2048) {
+            showMessage("🎉 2048達成！ 🎉");
+          }
+
+          render();
+        }, 250); 
+      }
+    }
+
+    startX = startY = undefined;
+  }
+
+  // 初期化処理
+  updateItemButtons();
+  updateScoreDisplay();
+  for (let i = 0; i < 4; i++) {
+    spawnNumber();
+  }
+  render();
+</script>
+</body>
+</html>

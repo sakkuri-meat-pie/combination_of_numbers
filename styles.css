@@ -1,0 +1,24 @@
+/* 各マス（タイル） */
+  .cell {
+    width: 70px;
+    height: 70px;
+    background-color: #fff;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.1);
+    /* ★追加: 重なり順と基準位置の調整 */
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ★追加: ぬるっと動かすためのアニメーション設定 */
+  .cell.moving {
+    transition: transform 0.2s ease-in-out; /* 0.2秒かけて滑らかに動く */
+    z-index: 10; /* 動いているマスが一番上にくるようにする */
+  }
